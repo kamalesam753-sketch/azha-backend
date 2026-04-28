@@ -632,7 +632,43 @@ app.all("/api", async (req, res, next) => {
         }
       });
     }
+    if (action === "generateClientToken") {
+      const permitId = req.query.id || req.body.id || "";
 
+      if (!permitId) {
+        return res.status(400).json({
+          success: false,
+          message: "Missing permit ID"
+        });
+      }
+
+      const permit = await Permit.findOne({ permitId }).lean();
+
+      if (!permit) {
+        return res.status(404).json({
+          success: false,
+          message: "Permit not found"
+        });
+      }
+
+      const tokenRow = await ensureTokenForPermit(permitId);
+
+      await auditAction("generate_token", session, {
+        permitId,
+        result: "success",
+        token: tokenRow.token
+      });
+
+      return res.json({
+        success: true,
+        data: {
+          permitId,
+          token: tokenRow.token,
+          secureToken: tokenRow.token,
+          clientUrl: buildClientUrl(tokenRow.token)
+        }
+      });
+    }
     if (action === "getClientPermit") {
       const secureToken = req.query.token || req.body.token || "";
       const tokenRow = await PermitToken.findOne({ token: secureToken, status: "active" }).lean();
