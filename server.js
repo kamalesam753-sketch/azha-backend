@@ -1,3 +1,14 @@
+
+function parseDMY(dateStr){
+  if(!dateStr) return null;
+  const parts = String(dateStr).split("/");
+  if(parts.length !== 3) return null;
+
+  const [d,m,y] = parts.map(Number);
+  if(!d || !m || !y) return null;
+
+  return new Date(y, m-1, d);
+}
 require("dotenv").config();
 
 const crypto = require("crypto");
