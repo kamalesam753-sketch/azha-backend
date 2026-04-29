@@ -298,21 +298,6 @@ function addDaysToKey(key, days) {
   return d.toISOString().slice(0, 10);
 }
 
-function computePermitStatus(startDate, endDate) {
-  const start = toDateKey(startDate);
-  const end = toDateKey(endDate);
-  const today = getTodayKey();
-  const tomorrow = addDaysToKey(today, 1);
-
-  if (!start || !end) return { statusArabic: "غير محدد", statusEnglish: "Undefined", statusClass: "warning" };
-  if (start === tomorrow) return { statusArabic: "يبدأ غدًا", statusEnglish: "Starts tomorrow", statusClass: "warning" };
-  if (start > tomorrow) return { statusArabic: "لم يبدأ", statusEnglish: "Not started", statusClass: "warning" };
-  if (start === today) return { statusArabic: "ساري", statusEnglish: "Active", statusClass: "valid" };
-  if (end === today) return { statusArabic: "آخر يوم ساري", statusEnglish: "Last valid day", statusClass: "warning" };
-  if (end < today) return { statusArabic: "انتهى", statusEnglish: "Expired", statusClass: "invalid" };
-
-  return { statusArabic: "ساري", statusEnglish: "Active", statusClass: "valid" };
-}
 
 function computePermitValidity(startDate, endDate, statusArabic, paymentArabic) {
   const status = computePermitStatus(startDate, endDate);
@@ -337,6 +322,7 @@ function computePermitValidity(startDate, endDate, statusArabic, paymentArabic) 
 }
 
 function mapPermitPayload(permit, secureToken) {
+
   const validity = computePermitValidity(
     permit.startDate || "",
     permit.endDate || "",
@@ -347,20 +333,21 @@ function mapPermitPayload(permit, secureToken) {
   return {
     permitId: permit.permitId || "",
     unit: permit.unit || "",
-    ownerName: permit.ownerName || "",
     tenant: permit.tenant || "",
     tenantCount: permit.tenantCount || "",
     phone: permit.phone || "",
     carPlate: permit.carPlate || "",
-    statusArabic: validity.computedStatusArabic || "",
-    paymentArabic: permit.paymentArabic || "",
-    validityClass: validity.validityClass || "",
-    validityText: validity.validityText || "",
-    validityNote: validity.validityNote || "",
     startDate: permit.startDate || "",
     endDate: permit.endDate || "",
-    secureToken: secureToken || "",
-    clientUrl: buildClientUrl(secureToken)
+    paymentArabic: permit.paymentArabic || "",
+
+    /* 👇 ده المهم */
+    statusArabic: validity.validityText,
+    validityClass: validity.validityClass,
+    validityText: validity.validityText,
+    validityNote: validity.validityNote,
+
+    token: secureToken || ""
   };
 }
 
