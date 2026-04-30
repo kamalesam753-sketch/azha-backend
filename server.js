@@ -1,3 +1,5 @@
+const fs = require("fs");
+const path = require("path");
 
 
 /* ===== AZHA FINAL VALIDITY ENGINE (SINGLE SOURCE OF TRUTH) ===== */
