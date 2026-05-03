@@ -10,6 +10,38 @@ const { logAction } = require("../services/audit.service");
 const env = require("../config/env");
 const rt = require("../services/realtime.service");
 
+/**
+ * Build permissions object from role for frontend dashboard access control.
+ */
+function buildPermissions(role) {
+  const base = {
+    canAccessDashboard: false,
+    canManagePermits: false,
+    canManageUsers: false,
+    canManageGates: false,
+    canManageTokens: false,
+    canViewAuditLogs: false,
+    canViewActiveSessions: false,
+    canViewSystemSettings: false,
+    canOpenGateFromDashboard: false,
+    defaultRoute: "login"
+  };
+
+  switch (role) {
+    case "admin":
+      return { ...base, canAccessDashboard: true, canManagePermits: true, canManageUsers: true, canManageGates: true, canManageTokens: true, canViewAuditLogs: true, canViewActiveSessions: true, canViewSystemSettings: true, canOpenGateFromDashboard: true, defaultRoute: "dashboard" };
+    case "supervisor":
+      return { ...base, canAccessDashboard: true, canManagePermits: true, canManageGates: true, canManageTokens: true, canViewAuditLogs: true, canViewActiveSessions: true, defaultRoute: "dashboard" };
+    case "viewer":
+      return { ...base, canAccessDashboard: true, defaultRoute: "dashboard" };
+    case "guard":
+    case "scanner":
+      return { ...base, defaultRoute: "gate" };
+    default:
+      return base;
+  }
+}
+
 async function login(req, res) {
   const { username, password } = req.body;
 
@@ -56,7 +88,8 @@ async function login(req, res) {
     role: user.role,
     fullName: user.fullName || "",
     gateName: user.gateName || "",
-    gateLocation: user.gateLocation || ""
+    gateLocation: user.gateLocation || "",
+    permissions: buildPermissions(user.role)
   }, "Login successful");
 }
 
@@ -66,7 +99,8 @@ async function verifySession(req, res) {
     role: req.sessionData.role,
     fullName: req.sessionData.fullName || "",
     gateName: req.sessionData.gateName || "",
-    gateLocation: req.sessionData.gateLocation || ""
+    gateLocation: req.sessionData.gateLocation || "",
+    permissions: buildPermissions(req.sessionData.role)
   }, "Session valid");
 }
 
@@ -84,3 +118,4 @@ async function logout(req, res) {
 }
 
 module.exports = { login, verifySession, logout };
+
