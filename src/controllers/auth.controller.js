@@ -16,6 +16,7 @@ const rt = require("../services/realtime.service");
 function buildPermissions(role) {
   const base = {
     canAccessDashboard: false,
+    canAccessGate: false,
     canManagePermits: false,
     canManageUsers: false,
     canManageGates: false,
@@ -24,19 +25,21 @@ function buildPermissions(role) {
     canViewActiveSessions: false,
     canViewSystemSettings: false,
     canOpenGateFromDashboard: false,
+    canOpenDashboardFromGate: false,
     defaultRoute: "login"
   };
 
   switch (role) {
     case "admin":
-      return { ...base, canAccessDashboard: true, canManagePermits: true, canManageUsers: true, canManageGates: true, canManageTokens: true, canViewAuditLogs: true, canViewActiveSessions: true, canViewSystemSettings: true, canOpenGateFromDashboard: true, defaultRoute: "dashboard" };
+      return { ...base, canAccessDashboard: true, canAccessGate: true, canManagePermits: true, canManageUsers: true, canManageGates: true, canManageTokens: true, canViewAuditLogs: true, canViewActiveSessions: true, canViewSystemSettings: true, canOpenGateFromDashboard: true, canOpenDashboardFromGate: true, defaultRoute: "dashboard" };
     case "supervisor":
-      return { ...base, canAccessDashboard: true, canManagePermits: true, canManageGates: true, canManageTokens: true, canViewAuditLogs: true, canViewActiveSessions: true, defaultRoute: "dashboard" };
+      return { ...base, canAccessDashboard: true, canAccessGate: true, canManagePermits: true, canManageGates: true, canManageTokens: true, canViewAuditLogs: true, canViewActiveSessions: true, canOpenDashboardFromGate: true, defaultRoute: "dashboard" };
     case "viewer":
       return { ...base, canAccessDashboard: true, defaultRoute: "dashboard" };
     case "guard":
+      return { ...base, canAccessGate: true, defaultRoute: "gate" };
     case "scanner":
-      return { ...base, defaultRoute: "gate" };
+      return { ...base, canAccessGate: true, defaultRoute: "gate" };
     default:
       return base;
   }
