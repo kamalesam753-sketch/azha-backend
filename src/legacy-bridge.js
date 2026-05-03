@@ -28,7 +28,7 @@ async function legacyBridge(req, res, next) {
     "deletePermit", "generateClientToken", "searchPermits", "scanToken",
     "latestScan", "getScanLog", "getUsers", "createUser", "updateUser",
     "deleteUser", "resetUserPassword", "getGates", "createGate", "updateGate",
-    "deleteGate", "submitDecision", "getSecurityActions", "dashboardBundle",
+    "deleteGate", "submitDecision", "getSecurityActions", "dashboardBundle", "getReports",
     "getTokenByPermit", "revokePermit",
     "getWatchlist", "addWatchlist", "resolveWatchlist", "deleteWatchlist",
     "emergencyStatus", "emergencyActivate", "emergencyDeactivate"
@@ -111,6 +111,13 @@ async function legacyBridge(req, res, next) {
 
       case "dashboardBundle":
         return await dashboardCtrl.getDashboard(req, res);
+
+      case "getReports":
+        // Map body params to query for GET-style controller
+        ["dateFrom","dateTo","gateName","validityClass","permitId","tenant","unit","limit"].forEach(function(k) {
+          if (req.body && req.body[k] !== undefined) req.query[k] = req.body[k];
+        });
+        return await dashboardCtrl.getReports(req, res);
 
       case "getUsers":
         return await userCtrl.getAll(req, res);
