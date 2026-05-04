@@ -20,29 +20,33 @@ async function getDashboard(req, res) {
 
   const [
     totalPermits,
-    totalScans,
     todayScans,
+    invalidScansToday,
     activeSessions,
-    totalPresent,
-    activeWatchlist,
     recentScans,
     recentActions,
     recentAudit,
-    gates
+    gates,
+    mainGateScans,
+    beachGateScans,
+    auditCountToday,
+    actionCountToday
   ] = await Promise.all([
     Permit.countDocuments(),
-    ScanLog.countDocuments(),
     ScanLog.countDocuments({ createdAt: { $gte: today, $lte: todayEnd } }),
+    ScanLog.countDocuments({ createdAt: { $gte: today, $lte: todayEnd }, result: { $in: ["invalid", "expired", "not_found"] } }),
     Session.countDocuments({ status: "active" }),
-    PresenceLog.countDocuments({ present: true, timestamp: { $gte: today } }),
-    Watchlist.countDocuments({ status: "active" }),
-    ScanLog.find().sort({ createdAt: -1 }).limit(20).lean(),
+    ScanLog.find().sort({ createdAt: -1 }).limit(1).lean(),
     SecurityAction.find().sort({ createdAt: -1 }).limit(20).lean(),
     AuditLog.find().sort({ createdAt: -1 }).limit(20).lean(),
-    Gate.find().lean()
+    Gate.find().lean(),
+    ScanLog.countDocuments({ createdAt: { $gte: today, $lte: todayEnd }, gateName: { $regex: /main/i } }),
+    ScanLog.countDocuments({ createdAt: { $gte: today, $lte: todayEnd }, gateName: { $regex: /beach/i } }),
+    AuditLog.countDocuments({ createdAt: { $gte: today, $lte: todayEnd } }),
+    SecurityAction.countDocuments({ createdAt: { $gte: today, $lte: todayEnd } })
   ]);
 
-  // Compute permit status counts
+  // Compute permit validity counts
   const allPermits = await Permit.find().select("startDate endDate statusArabic paymentArabic").lean();
   let validCount = 0, warningCount = 0, invalidCount = 0;
 
@@ -53,22 +57,95 @@ async function getDashboard(req, res) {
     else invalidCount++;
   }
 
+  // Build latest verification from most recent scan
+  const latestScan = recentScans[0] || null;
+  const latest = latestScan ? {
+    found: true,
+    permitId: latestScan.permitId || "",
+    tenant: latestScan.tenant || "",
+    unit: latestScan.unit || "",
+    gateName: latestScan.gateName || "",
+    gateLocation: latestScan.gateLocation || "",
+    securityUsername: latestScan.securityUsername || "",
+    role: latestScan.role || "",
+    statusArabic: latestScan.statusArabic || "",
+    paymentArabic: latestScan.paymentArabic || "",
+    validityClass: latestScan.result || "",
+    validityText: latestScan.resultText || "",
+    mode: latestScan.mode || "scan",
+    timestamp: latestScan.createdAt ? new Date(latestScan.createdAt).toLocaleString() : ""
+  } : { found: false };
+
+  // Format audit logs as arrays for frontend renderAuditLogs (expects row[0], row[1], etc.)
+  const auditLogs = recentAudit.map(a => [
+    a.createdAt ? new Date(a.createdAt).toLocaleString() : "-",       // [0] timestamp
+    a.action || "-",                                                    // [1] action
+    a.username || "-",                                                  // [2] user
+    a.details || "-",                                                   // [3] details
+    a.target || a.permitId || "-",                                      // [4] target
+    "", "", "", "", "", "",                                              // [5-10] padding
+    a.gateName || "-",                                                  // [11] gate
+    a.gateLocation || "-",                                              // [12] gate location
+    a.username || "-",                                                  // [13] operator
+    a.role || "-"                                                       // [14] role
+  ]);
+
+  // Format security actions for frontend renderSecurityActions
+  const securityActions = recentActions.map(a => ({
+    createdAt: a.createdAt ? new Date(a.createdAt).toLocaleString() : "-",
+    permitId: a.permitId || "-",
+    action: a.decision || a.action || "-",
+    notes: a.notes || "-",
+    username: a.username || "-",
+    gateName: a.gateName || "-"
+  }));
+
+  // Build permissions from session
+  const permissions = req.sessionData ? require("./auth.controller.js") : null;
+
   return success(res, {
-    stats: {
-      totalPermits,
-      validPermits: validCount,
-      warningPermits: warningCount,
-      expiredPermits: invalidCount,
-      totalScans,
+    dashboard: {
+      total: totalPermits,
+      active: validCount,
+      warning: warningCount,
+      expired: invalidCount,
       todayScans,
-      activeSessions,
-      totalPresent,
-      activeWatchlist,
-      totalGates: gates.length
+      invalidScansToday
     },
-    recentScans,
-    recentActions,
-    recentAudit,
+    summary: {
+      invalidScans: invalidScansToday,
+      mainGateScans,
+      beachGateScans,
+      activeSessions,
+      approvedCount: 0,
+      rejectedCount: 0,
+      reviewCount: 0,
+      paymentIssueCount: warningCount
+    },
+    operations: {
+      auditCountToday,
+      actionCountToday
+    },
+    latest,
+    auditLogs,
+    securityActions,
+    activeSessions: [],
+    permitTokens: [],
+    systemSettings: [],
+    userContext: {
+      generatedAt: new Date().toISOString(),
+      permissions: req.sessionData ? {
+        canAccessDashboard: true,
+        canManagePermits: true,
+        canManageUsers: true,
+        canManageGates: true,
+        canManageTokens: true,
+        canViewAuditLogs: true,
+        canViewActiveSessions: true,
+        canViewSystemSettings: true,
+        canOpenGateFromDashboard: true
+      } : {}
+    },
     gates
   });
 }
