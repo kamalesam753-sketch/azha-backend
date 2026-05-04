@@ -9,6 +9,8 @@ const AuditLog = require("../models/AuditLog");
 const PresenceLog = require("../models/PresenceLog");
 const Gate = require("../models/Gate");
 const Watchlist = require("../models/Watchlist");
+const PermitToken = require("../models/PermitToken");
+const SystemSetting = require("../models/SystemSetting");
 const { success } = require("../utils/response");
 const { computePermitValidity } = require("../services/validity.service");
 const { startOfToday, endOfToday } = require("../utils/date");
@@ -30,20 +32,36 @@ async function getDashboard(req, res) {
     mainGateScans,
     beachGateScans,
     auditCountToday,
-    actionCountToday
+    actionCountToday,
+    activeSessionsList,
+    permitTokens,
+    systemSettings,
+    approvedCount,
+    rejectedCount,
+    reviewCount,
+    presentCount
   ] = await Promise.all([
     Permit.countDocuments(),
     ScanLog.countDocuments({ createdAt: { $gte: today, $lte: todayEnd } }),
     ScanLog.countDocuments({ createdAt: { $gte: today, $lte: todayEnd }, result: { $in: ["invalid", "expired", "not_found"] } }),
     Session.countDocuments({ status: "active" }),
-    ScanLog.find().sort({ createdAt: -1 }).limit(1).lean(),
+    ScanLog.find().sort({ createdAt: -1 }).limit(20).lean(),
     SecurityAction.find().sort({ createdAt: -1 }).limit(20).lean(),
     AuditLog.find().sort({ createdAt: -1 }).limit(20).lean(),
     Gate.find().lean(),
     ScanLog.countDocuments({ createdAt: { $gte: today, $lte: todayEnd }, gateName: { $regex: /main/i } }),
     ScanLog.countDocuments({ createdAt: { $gte: today, $lte: todayEnd }, gateName: { $regex: /beach/i } }),
     AuditLog.countDocuments({ createdAt: { $gte: today, $lte: todayEnd } }),
-    SecurityAction.countDocuments({ createdAt: { $gte: today, $lte: todayEnd } })
+    SecurityAction.countDocuments({ createdAt: { $gte: today, $lte: todayEnd } }),
+    Session.find({ status: "active" }).sort({ lastActivity: -1 }).limit(20)
+      .select("username fullName role gateName gateLocation createdAt expiresAt lastActivity").lean(),
+    PermitToken.find().sort({ createdAt: -1 }).limit(50)
+      .select("permitId token status createdAt regeneratedAt disabledBy").lean(),
+    SystemSetting.find().lean(),
+    SecurityAction.countDocuments({ decision: "approved", createdAt: { $gte: today, $lte: todayEnd } }),
+    SecurityAction.countDocuments({ decision: "rejected", createdAt: { $gte: today, $lte: todayEnd } }),
+    SecurityAction.countDocuments({ decision: { $in: ["review_required", "payment_issue"] }, createdAt: { $gte: today, $lte: todayEnd } }),
+    PresenceLog.countDocuments({ present: true, timestamp: { $gte: today } })
   ]);
 
   // Compute permit validity counts
@@ -117,10 +135,11 @@ async function getDashboard(req, res) {
       mainGateScans,
       beachGateScans,
       activeSessions,
-      approvedCount: 0,
-      rejectedCount: 0,
-      reviewCount: 0,
-      paymentIssueCount: warningCount
+      approvedCount,
+      rejectedCount,
+      reviewCount,
+      paymentIssueCount: warningCount,
+      presentCount
     },
     operations: {
       auditCountToday,
@@ -129,9 +148,32 @@ async function getDashboard(req, res) {
     latest,
     auditLogs,
     securityActions,
-    activeSessions: [],
-    permitTokens: [],
-    systemSettings: [],
+    activeSessions: activeSessionsList.map(s => ({
+      username: s.username || "-",
+      fullName: s.fullName || "-",
+      role: s.role || "-",
+      gateName: s.gateName || "-",
+      gateLocation: s.gateLocation || "-",
+      createdAt: s.createdAt ? new Date(s.createdAt).toLocaleString() : "-",
+      expiresAt: s.expiresAt ? new Date(s.expiresAt).toLocaleString() : "-",
+      lastActivity: s.lastActivity ? new Date(s.lastActivity).toLocaleString() : "-"
+    })),
+    permitTokens: permitTokens.map(t => ({
+      permitId: t.permitId || "-",
+      token: t.token ? (t.token.substring(0, 12) + "...") : "-",
+      status: t.status || "-",
+      createdAt: t.createdAt ? new Date(t.createdAt).toLocaleString() : "-",
+      regeneratedAt: t.regeneratedAt ? new Date(t.regeneratedAt).toLocaleString() : "-",
+      disabledBy: t.disabledBy || "-"
+    })),
+    systemSettings: systemSettings.length ? systemSettings.map(s => ({ key: s.key, value: s.value })) : [
+      { key: "Platform", value: "AZHA Enterprise Security v2.0" },
+      { key: "Backend", value: "Railway (Node.js + MongoDB)" },
+      { key: "Frontend", value: "Vercel (Static)" },
+      { key: "Auth", value: "JWT Session-based" },
+      { key: "Realtime", value: "Socket.IO" },
+      { key: "Session TTL", value: process.env.SESSION_HOURS ? process.env.SESSION_HOURS + " hours" : "24 hours" }
+    ],
     userContext: {
       generatedAt: new Date().toISOString(),
       permissions: req.sessionData ? {
@@ -146,6 +188,7 @@ async function getDashboard(req, res) {
         canOpenGateFromDashboard: true
       } : {}
     },
+    recentScans,
     gates
   });
 }
